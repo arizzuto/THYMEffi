@@ -1,0 +1,1 @@
+This is where tess cut downloads temporarily go, no need to really care too much about this place. Note if you run multiple things at once they will EAT each others DL's!!

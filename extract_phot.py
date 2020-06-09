@@ -321,6 +321,7 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
         cdp[jj] =  np.std(fluxcirc[okok]-medim[okok,jj])
     best = np.argmin(cdp)
     bg = medim[:,best]
+    print('Using lowest ' + str(5*(best+1)) + ' percent of pixels as the sky level')
     ##pdb.set_trace()
 
 ##PLOTTING AND OUTPUTS

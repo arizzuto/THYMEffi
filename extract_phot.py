@@ -248,7 +248,7 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
         
         ##if the aperture size is fixed, ignore the numbers produced above:
         if fixaperture >0:
-            xsig = fixaperture*1.0
+            xsig = fixaperture/5.0
 
     for i in range(len(hdu[1].data)):
         #print str(i) + ' of ' + str(len(hdu[1].data))

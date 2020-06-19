@@ -1,5 +1,5 @@
 import numpy as np
-import pdb,glob,os,sys,time,pickle
+import pdb,glob,os,sys,time,pickle,shutil
 from astropy.io import fits
 import matplotlib.pyplot as plt
 import extract_phot 
@@ -7,19 +7,25 @@ from readcol import readcol
 import querytesscut
 
 ##input file:
-infile = 'targetlists/onlythegoodstuff.csv' ##put your target list here
+#infile = 'targetlists/onlythegoodstuff.csv' ##put your target list here
+infile = 'targetlists/HD110082_rizz.csv' ##ERN target list for octans I think
+#infile = 'targetlists/hyades_rizz.csv' ##ERN target list for Hyades
 indata = readcol(infile,fsep=',',asRecArray=True)
 
 datadir = 'datastore/'
 runsector = None ##run with runsector=None to make a first population by doing everything
 runsector = None
-xs,ys = 31,31 ##the tpf size to ask for, large but not crazy
-
+xs,ys = 51,51 ##the tpf size to ask for, large but not crazy, if you change this for star you've alreay DL'd and analyzed, suggest using redotpf=True
+global_bgtype = 'cubic'
 ##got a particular in mind? do this
 ##qwe  = np.where(indata.tic == 270377865)[0]
 #start=qwe[0]
-
-start = 0 ##do from the start to end of your list
+##ERN FAILS:
+##1921989615, 293435879, 323878806, 288106057,673534579,673621253,402226093,325469904
+#qwe  = np.where(indata.tic ==323878806)[0]
+#start = qwe[0]
+#pdb.set_trace()
+start = 0##do from the start to end of your list
 
 ##rerun things already existing?
 redotpf = True
@@ -34,11 +40,14 @@ for i in range(start,len(indata)):
     if qradec_code == -1: print('No data for this guy in this sector, skipping')
     if qradec_code ==  0: 
         if redotpf == True:
+            if os.path.exists(datadir+'tic'+str(indata.tic[i])):
+                shutil.rmtree(datadir+'tic'+str(indata.tic[i]))
             qradec_code,tpflocations = querytesscut.qradec(indata.tic[i],indata.ra[i],indata.dec[i],datadir=datadir,xsize=xs,ysize=ys,sector=None,dummymode=False)
             if qradec_code != 0: 
                 print('something very wrong here! I need your help!!!!!!!')
                 pdb.set_trace()
-            
+        else: tpflocations = datadir+'tic'+str(indata.tic[i])+'/'
+     ##   pdb.set_trace()
         print('target observed in this sector, extracting photometry')
         tpffiles = glob.glob(tpflocations+'*_astrocut.fits')
         for j in range(0, len(tpffiles)):
@@ -77,7 +86,7 @@ for i in range(start,len(indata)):
                 
                     #pdb.set_trace()
                     if len(zxc)*1.0/len(tot_image.flatten()) < 0.05: ##if more than 5% of pixels are nans. dont even bother
-                        lcdata = extract_phot.run_extraction(tpffiles[j],resultfilename,plotmovie=False,contig=contig,tmag=indata.tmag[i],sector = thissector,fixaperture=-1)
+                        lcdata = extract_phot.run_extraction(tpffiles[j],resultfilename,plotmovie=False,noplots=False,centroidmode='fixed',bgtype=global_bgtype,contig=contig,tmag=indata.tmag[i],sector = thissector,fixaperture=-1)
                     thishdu.close()
                     
                     ##at this point you have a lightcurve, can convert it to what I use with:

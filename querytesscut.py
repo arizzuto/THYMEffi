@@ -15,8 +15,14 @@ def qradec(tic,ra,dec,datadir = '/Volumes/UTOld/tessdata/',xsize=31,ysize=31,sec
     ##sector and tic are integeres, as as x/ysize
     
     ##build the command
-    queryurl = 'https://mast.stsci.edu/tesscut/api/v0.1/astrocut?ra='+str(ra)+'&dec='+str(dec)+'&y='+str(ysize)+'&x='+str(xsize)
-    if sector != None: queryurl += '&sector='+str(sector)
+    queryurl = 'https://mast.stsci.edu/tesscut/api/v0.1/astrocut?ra='+str(ra)+'&dec='+str(dec)+'&x='+str(xsize)+'&y='+str(ysize)+'&units=px'
+ #   pdb.set_trace()    
+  # # https://mast.stsci.edu/tesscut/api/v0.1/astrocut?ra=136.524818800348&dec=-76.7857934853963&y=51&x=51&units=px&sector=all
+
+    if sector != None: 
+        queryurl += '&sector='+str(sector)
+    else:
+        queryurl += '&sector=All'
     command  = '/usr/local/bin/wget -O ./tesscut_tmp/latest.zip "'+queryurl + '"'  
     
     process = subprocess.Popen(command,shell=True,stdout=subprocess.PIPE)    

@@ -253,8 +253,8 @@ def tess_circmask(im,sig_im,r,xcen,ycen):
    # pdb.set_trace()
     inradius = np.where(np.sqrt((imx-xcen)**2 + (imy-ycen)**2) <= r)
     thisflux = np.sum(im[inradius[0],inradius[1]])/len(inradius[0])
-
-    return thisflux,inradius[0],inradius[1],imx,imy
+    thiserror = np.sqrt(np.sum(sig_im[inradius[0],inradius[1]]**2))/len(inradius[0])
+    return thisflux,inradius[0],inradius[1],imx,imy,thiserror
 
 def cstep(map,shape,xstart,ystart):
 
@@ -302,6 +302,8 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
     standard_medim = np.zeros(len(hdu[1].data))
     interpbg = np.zeros(len(hdu[1].data))
     fluxcirc = np.zeros(len(hdu[1].data))
+    fluxcirc_err = np.zeros(len(hdu[1].data))
+
     qual = np.zeros(len(hdu[1].data),dtype=int)
     head = hdu[1].header
 
@@ -311,20 +313,23 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
     for i in range(len(hdu[1].data)): 
         qual[i]    = hdu[1].data[i]['QUALITY']*1
         
-
-        if (np.isnan(hdu[1].data[i][4]).any() == False) & (qual[i] == 0) & (np.max( hdu[1].data[i][4]) > 0.0): 
+        ##this qualifier: (np.isnan(hdu[1].data[i][4]).any() == False) & not needed I think
+        if  (qual[i] == 0) & (np.nanmax( hdu[1].data[i][4]) > 0.0): 
             tot_image +=  hdu[1].data[i][4]*1.0
             tot_image_err +=  hdu[1].data[i][5]*1.0
+        nannan =np.where(np.isnan(tot_image) == True)
+        tot_image[nannan[0],nannan[1]] = np.nanmedian(tot_image)
+        
     #find all stars
     
     threshold_mult=0.01
 
-    qwe =np.where(tot_image > np.max(tot_image)*threshold_mult)
+    qwe =np.where(tot_image > np.nanmax(tot_image)*threshold_mult)
     if len(qwe[0]) > 0.9*len(tot_image.flatten()): 
         badmult=True
         while badmult == True:     
             threshold_mult += 0.005
-            qwe =np.where(tot_image > np.max(tot_image)*threshold_mult)
+            qwe =np.where(tot_image > np.nanmax(tot_image)*threshold_mult)
             if len(qwe[0]) < 0.9*len(tot_image.flatten()): badmult=False
     scord = peak_local_max(tot_image, min_distance=1,exclude_border=False,threshold_rel=threshold_mult,num_peaks=10) ##=np.median(tot_image)+np.std(tot_image)*1.25/np.sqrt(len(tot_image.flatten()))*3
     
@@ -337,7 +342,7 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
               #  pdb.set_trace()
                 thiscoord = [cc[0]-windsize+c1,cc[1]-windsize+c2]
                 if (thiscoord[0] >= 0) & (thiscoord[1]>=0) & (thiscoord[0] < tot_image.shape[0]) & (thiscoord[1]<tot_image.shape[1]):  
-                    if tot_image[thiscoord[0],thiscoord[1]] >= np.min([np.max(tot_image)*0.01,np.median(tot_image)*1.1]): ###only mask out pixel aboce the threshold level., dont over extend windows
+                    if tot_image[thiscoord[0],thiscoord[1]] >= np.nanmin([np.nanmax(tot_image)*0.01,np.median(tot_image)*1.1]): ###only mask out pixel aboce the threshold level., dont over extend windows
                         starcoords += (thiscoord,)
                   
 
@@ -348,7 +353,7 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
     #pdb.set_trace()
     if (np.nanmax(tot_image) == 0) | (len(np.where(np.isnan(tot_image.flatten())==True)[0]) == len(tot_image.flatten())):
         print( 'bad image, not data')
-        ##pdb.set_trace()
+        pdb.set_trace()
         return -1
     edged = np.where(tot_image == 0)
     other = np.where(tot_image.flatten() >  0)
@@ -390,7 +395,7 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
         if contig == False:
             xcen[i] = xcen1
             ycen[i] = ycen1
-            fluxcirc[i],xin,yin,xim,yim = tess_circmask(im,im_err,np.round(xsig*5),xcen1,ycen1)  
+            fluxcirc[i],xin,yin,xim,yim,fluxcirc_err[i] = tess_circmask(im,im_err,np.round(xsig*5),xcen1,ycen1)  
             if centroidmode == 'free': ##return the centroid positions for each image if centroid mode is set to free, for custom stuff really
                 if np.isnan(im).any() == False:
                     stopper=False
@@ -399,7 +404,7 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
                     xcen[i]=thisxcen
                     ycen[i]=thisycen
                     print('image ' + str(i+1) + ' out of ' + str(len(hdu[1].data)))
-                fluxcirc[i],xin,yin,xim,yim = tess_circmask(im,im_err,np.round(xsig*5),xcen1,ycen1)  
+                fluxcirc[i],xin,yin,xim,yim,fluxcirc_err[i] = tess_circmask(im,im_err,np.round(xsig*5),xcen1,ycen1)  
                       
             
             cshape = im*0
@@ -409,7 +414,7 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
             ##find the lowest 5% of pixels:
             ##if there are zeros in the image, need to ignore those for percentile to make sense
              ##we should also make all the pixels in the aperture zero with a boundary a pixel wider than the size of the aperture
-            ddd,xin2,yin2,xim2,yim2 = tess_circmask(im,im_err,np.round(xsig*5)*1+1,xcen1,ycen1)  
+            ddd,xin2,yin2,xim2,yim2,dddd = tess_circmask(im,im_err,np.round(xsig*5)*1+1,xcen1,ycen1)  
             imim = im*1.0
             imim[xin2,yin2] = 0.0
             #pdb.set_trace()
@@ -425,11 +430,11 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
             yvector = np.arange(im.shape[1])
             imxg,imyg = np.meshgrid(xvector,yvector)
            # if i == 15: pdb.set_trace()
-           # pdb.set_trace()
+         #   pdb.set_trace()
             if (bgtype == 'linear') | (bgtype == 'cubic'):  
-                if np.max(im)< 0: interpbg[i] = interpbg[i-1]##if the image is all negative, use the previous value just to get past this 
+                if np.nanmax(im)< 0: interpbg[i] = interpbg[i-1]##if the image is all negative, use the previous value just to get past this 
                # pdb.set_trace()
-                if np.max(im) > 0: 
+                if np.nanmax(im) > 0: 
                     girdded = interpolate.griddata(okcoords2,imim[okcoords2[:,0],okcoords2[:,1]],(imyg,imxg),method=bgtype)
                     interpbg[i] = np.mean(girdded[xin,yin])
 
@@ -443,7 +448,7 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
                 lowmark = np.nanpercentile(flatim[nonzero],(jj+1)*5)
                 lowpix = np.where((flatim[nonzero]<lowmark) & (np.isnan(flatim[nonzero]) == False))[0]
                 medim[i,jj] = np.nanmean(flatim[nonzero][lowpix])
-    
+
             
             
             
@@ -557,7 +562,7 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
         plt.close(fig2)     
         plt.close(fig3)  
 
-    
+    #pdb.set_trace()
     ##now make the lightcurve output structure
     output = np.recarray((len(fluxcirc),),dtype=[('t',float),('xcen',float),('ycen',float),('bg',float),('flx',float),('circrad',float),('quality',int)])
     output.t       = cadtime
@@ -565,6 +570,7 @@ def run_extraction(filename,resultfilename,aperture_radius=3,plotmovie=False,con
     output.ycen    = ycen
     output.bg      = bg
     output.flx     = fluxcirc
+    output.flx_err = fluxcirc_err
     output.quality = qual
     
     if contig == False: output.circrad = xsig*5
@@ -584,15 +590,21 @@ def LCconvert(lcdata,sector3=False,correctmdump=True):
     ##convert to notch pipeline format inputs:
     ##is the sector is 3, there's something funky with the quality flags, make sure to fix this 
     dl = len(lcdata)
-    outdata         = np.recarray((dl,),dtype=[('t',float),('fraw',float),('fcor',float),('s',float),('qual',int),('detrend',float),('divisions',float)])
+    outdata         = np.recarray((dl,),dtype=[('t',float),('fraw',float),('fcor',float),('s',float),('qual',int),('detrend',float),('divisions',float),('fraw_err',float),('fcor_err',float)])
     outdata.t = lcdata.t
     outdata.fraw = lcdata.flx
     outdata.fcor = lcdata.flx-lcdata.bg
     outdata.qual = lcdata.quality
+    outdata.fraw_err = lcdata.flx_err
+    outdata.fcor_err = lcdata.flx_err
+
     okok = np.where(np.isnan(outdata.fcor)==False)[0]  
     outdata = outdata[okok]
+    outdata.fraw_err /= np.nanmedian(outdata.fraw)
+    outdata.fcor_err /= np.nanmedian(outdata.fcor)
     outdata.fraw /= np.nanmedian(outdata.fraw)
     outdata.fcor /= np.nanmedian(outdata.fcor)
+    
     ##remove bad points
     #pdb.set_trace()
     ##level out the momentum dump flux shifts. This is at qual==32 flag.
